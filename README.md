@@ -72,94 +72,141 @@ The card provides a large "Now Playing" view, media browsing, favorites, speaker
 
 <h3>Manual Installation</h3>
 <ol><li>Copy the card file into:</li></p>
-/config/www/ha-unified-media-card/
+<blockquote>/config/www/ha-unified-media-card/</blockquote>
 </b></p>
 Example:
 </b></p>
-/config/www/ha-unified-media-card/ha-unified-media-card.js</p>
+<blockquote>/config/www/ha-unified-media-card/ha-unified-media-card.js</blockquote></p>
 <li>Add the resource:</li></p>
-url: /local/ha-unified-media-card/ha-unified-media-card.js</b></p>
-type: module</p>
+<blockquote>url: /local/ha-unified-media-card/ha-unified-media-card.js <br>
+type: module</blockquote></p>
 <li>Reload Home Assistant.</li></ol>
 </b></p>
 <h2>Basic Configuration</h2>
-type: custom:ha-unified-media-card
-
-entities:
-  - media_player.heos_kueche
-  - media_player.heos_wohnzimmer
-  - media_player.heos_schlafzimmer
-
-entity: media_player.heos_kueche
-
-title: Heimkino
-card_height: 600
-default_source: heos
-stop_instead_of_pause: auto
+<blockquote>type: custom:ha-unified-media-card<br>
+entities:<br>
+  - media_player.wohnzimmer<br>
+  - media_player.schlafzimmer<br>
+</blockquote>
 
 <h2>Full Configuration Example</h2>
-type: custom:ha-unified-media-card
-
-title: Heimkino
-
-entities:
-  - media_player.heos_kueche
-  - media_player.heos_wohnzimmer
-  - media_player.heos_schlafzimmer
-
-entities_ma:
-  - media_player.ma_kueche
-  - media_player.ma_wohnzimmer
-
-card_height: 650
-
-default_source: heos
-
-stop_instead_of_pause: auto
-
-settings_in_footer: true
-
-source_name: Sonos
+<blockquote>type: custom:ha-unified-media-card<br>
+source_name: HEOS<br>
+card_height: 560<br>
+entities:<br>
+  - media_player.wohnzimmer<br>
+  - media_player.schlafzimmer<br>
+entities_ma:<br>
+  - media_player.wohnzimmer_ma<br>
+  - media_player.schlafzimmer_ma<br>
+default_source: heos<br>
+stop_instead_of_pause: auto<br>
+settings_in_footer: false<br>
+queue_enable: false<br>
+</blockquote>
 
 <h2>Configuration Options</h2>
-Option	Type	Default	Description
-entity	string	-	Fallback media player if entities is not defined
-entities	list	[]	HEOS / Sonos players
-entities_ma	list	[]	Music Assistant players
-title	string	""	Card title
-card_height	number	600	Card height in pixels
-default_source	string	heos	Initial source (heos or ma)
-stop_instead_of_pause	string	auto	Playback behavior
-settings_in_footer	boolean	true	Show settings button in footer
-source_name	string	HEOS	Custom display name for HEOS/Sonos source
+<table style="width:100%"><tr>
+    <th>Option</th>
+    <th>Type</th>
+    <th>Default</th>
+    <th>Description</th></tr>
+<tr>
+    <td><mark>entity</mark></td>
+    <td>string</td>
+    <td>-</td>
+    <td>Fallback media player if <mark>entities</mark> is not defined</td></tr>
+<tr>
+    <td><mark>entities</mark></td>
+    <td>list</td>
+    <td><mark>[]</mark></td>
+    <td>HEOS / Sonos players</td></tr>
+<tr>
+    <td><mark>entities_ma</mark></td>
+    <td>list</td>
+    <td><mark>[]</mark></td>
+    <td>Music Assistant players</td></tr>
+<tr>
+    <td><mark>card_height</mark></td>
+    <td>number</td>
+    <td><mark>600</mark></td>
+    <td>Card height in pixels</td></tr>
+<tr>
+    <td><mark>default_source</mark></td>
+    <td>string</td>
+    <td><mark>heos</mark></td>
+    <td>Initial source (<mark>heos</mark> or <mark>ma</mark>)</td></tr>
+<tr>
+    <td><mark>stop_instead_of_pause</mark></td>
+    <td>string</td>
+    <td><mark>auto</mark></td>
+    <td>Playback behavior</td></tr>
+<tr>
+    <td><mark>queue_enable</mark></td>
+    <td>boolean</td>
+    <td><mark>true</mark></td>
+    <td>Show queue button in footer</td></tr>
+<tr>
+    <td><mark>settings_in_footer</mark></td>
+    <td>boolean</td>
+    <td><mark>true</mark></td>
+    <td>Show settings button in footer</td></tr>
+<tr>
+    <td><mark>source_name</mark></td>
+    <td>string</td>
+    <td><mark>HEOS</mark></td>
+    <td>Custom display name for HEOS/Sonos source</td></tr>
+</table>
+			
+			
+			
 
 <h3>stop_instead_of_pause</h3>
 
 Controls how the main playback button behaves.
 
-auto
+<mark>auto</mark>
 
 Automatically chooses between pause and stop.
 
 Recommended for most setups.
 
-stop_instead_of_pause: auto
-always
+<blockquote>stop_instead_of_pause: auto</blockquote>
+
+<mark>always</mark>
 
 Always sends a stop command.
 
-stop_instead_of_pause: always
-never
+<blockquote>stop_instead_of_pause: always</blockquote>
+
+<mark>never</mark>
 
 Always sends a pause command.
 
-stop_instead_of_pause: never
+<blockquote>stop_instead_of_pause: never</blockquote>
 
 <h3>Navigation Tabs</h3>
-Tab	Function
-Home	Current playback view
-Browser	Browse media libraries
-Favorites	Quick access to favorites
-Speakers	Speaker selection and grouping
-Queue	Current playback queue
-Settings	Card configuration and diagnostics
+<table style="width:100%"><tr>
+    <th>Tab</th>
+    <th>Function</th></tr>
+<tr>
+    <td>Home</td>
+    <td>Current playback view</td></tr>
+<tr>
+    <td>Browser</td>
+    <td>Browse media libraries</td></tr>
+<tr>
+    <td>Favorites</td>
+    <td>Quick access to favorites</td></tr>
+<tr>
+    <td>Speakers</td>
+    <td>Speaker selection and grouping</td></tr>
+<tr>
+    <td>Queue</td>
+    <td>Current playback queue</td></tr>
+<tr>
+    <td>Settings</td>
+    <td>Card configuration and diagnostics</td></tr>
+</table>
+	
+	
