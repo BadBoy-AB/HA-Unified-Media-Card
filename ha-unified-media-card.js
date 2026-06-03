@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v6.3.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v6.4.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v6.3.0:
+ * Changelog v6.4.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -419,27 +419,29 @@ const CSS = `
   .brow-back ha-icon { --mdc-icon-size: 18px; }
   .brow-title { font-size: 12px; font-weight: 600; color: var(--tx); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .tile-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; }
   .tile {
-    background: var(--s1); border-radius: var(--rs); padding: 8px 6px;
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    background: var(--s1); border-radius: 12px; padding: 12px 10px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
     cursor: pointer; border: 1px solid transparent; transition: all .18s; text-align: center;
   }
   .tile:hover  { background: var(--s2); border-color: var(--bd); }
   .tile.active { border-color: var(--ac); background: rgba(166,124,250,.1); }
   .tile-art {
-    width: 52px; height: 52px; border-radius: 11px; overflow: hidden;
+    width: 90px; height: 90px; border-radius: 14px; overflow: hidden;
     position: relative;
     display: flex; align-items: center; justify-content: center; background: var(--s2);
   }
-  /* Bild als Overlay, object-fit:contain → Logo nicht beschnitten */
+  /* Bild als absolutes Overlay über dem Icon */
   .tile-art img {
     position: absolute; inset: 0; z-index: 1;
-    width: 100%; height: 100%; object-fit: contain;
+    width: 100%; height: 100%;
+    object-fit: contain;    /* Logo nicht beschneiden */
+    padding: 8px;           /* etwas Luft zu den Kanten */
   }
-  /* Icon immer sichtbar als Fallback-Hintergrund */
-  .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 24px; }
-  .tile-name { font-size: 10px; color: var(--mu); line-height: 1.2; overflow: hidden;
+  /* Icon als Fallback: flex:0 0 auto verhindert Streckung auf volle Breite */
+  .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 36px; flex: 0 0 auto; }
+  .tile-name { font-size: 11px; color: var(--mu); line-height: 1.3; overflow: hidden;
                text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2;
                -webkit-box-orient: vertical; width: 100%; }
 
@@ -1200,7 +1202,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     const imgR  = item.thumbnail
       ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy"
              onerror="this.style.display='none'"
-             onload="if(this.naturalWidth<=4||this.naturalHeight<=4)this.style.display='none'">`
+             onload="if(this.naturalWidth<=4||this.naturalHeight<=4){this.style.display='none'}else{this.previousElementSibling.style.display='none'}">`
       : '';
     const art  = `<ha-icon icon="${icon2}"></ha-icon>${imgR}`;
     const sub  = [item.media_artist, item.media_album_name].filter(Boolean).join(' · ');
@@ -1413,7 +1415,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v6.3.0</span>
+        <span style="font-size:11px;color:var(--dim)">v6.4.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1476,7 +1478,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v6.3.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v6.4.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
