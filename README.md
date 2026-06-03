@@ -26,10 +26,6 @@ The card provides a large "Now Playing" view, media browsing, favorites, speaker
 - Navigate folders, playlists, albums, artists, and tracks
 - Automatic icons based on source and media type
 
-### ❤️ Favorites
-- Direct access to HEOS favorites
-- Improved root browsing support
-
 ### 🔊 Speaker Management
 - Select individual players
 - Active speaker determines playback control
