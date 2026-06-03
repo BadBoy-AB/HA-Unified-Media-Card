@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v7.2.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v7.4.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v7.2.0:
+ * Changelog v7.4.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -1442,10 +1442,24 @@ class HaUnifiedMediaCard extends HTMLElement {
   }
 
   // ── Alle Lautsprecher trennen ───────────────────────────
+  // HEOS: unjoin auf dem Gruppen-Master → Fehler "Command not executed (7)".
+  // Lösung: nur Mitglieder (non-master) trennen. group_members[0] = Master.
+  // Gruppe löst sich auf sobald alle Mitglieder ausgetreten sind.
   _ungroupAll() {
     const ids = this._currentIds;
-    ids.forEach(id => this._a(id).leaveGroup());
-    // Sofortiges DOM-Feedback — nicht auf HA-State warten
+
+    ids.forEach(id => {
+      const a       = this._a(id);
+      const members = a.groupMembers;
+      if (members.length <= 1) return;           // nicht gruppiert → überspringen
+
+      const masterId = members[0];               // erstes Element = Gruppen-Master
+      if (id === masterId) return;               // Master überspringen (HEOS Fehler 7)
+
+      a.leaveGroup();                            // nur Mitglieder trennen
+    });
+
+    // Sofortiges DOM-Feedback
     this.shadowRoot.querySelector('.spk-list-inner')
       ?.querySelectorAll('.spk-item').forEach(item => {
         item.classList.remove('grp');
@@ -1457,7 +1471,9 @@ class HaUnifiedMediaCard extends HTMLElement {
             idle:'Bereit', off:'Aus' })[a.state] ?? a.state;
         }
       });
-    setTimeout(() => this._renderSpeakers(), 2000);
+
+    // Nach HA-Propagation neu rendern
+    setTimeout(() => this._renderSpeakers(), 2500);
   }
 
   // ══════════════════════════════════════════════════════
@@ -1563,7 +1579,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v7.2.0</span>
+        <span style="font-size:11px;color:var(--dim)">v7.4.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1620,12 +1636,13 @@ class HaUnifiedMediaCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._config = {};
-    this._hass   = null;
-    this._formed = false;
+    this._config      = {};
+    this._originalCfg = {};  // vollständige Original-Config inkl. 'type'
+    this._hass        = null;
+    this._formed      = false;
+    this._ownChange   = false;
   }
 
-  // HA übergibt hass zum Editor — für Entity-Picker notwendig
   set hass(h) {
     this._hass = h;
     const form = this.shadowRoot.querySelector('ha-form');
@@ -1633,15 +1650,30 @@ class HaUnifiedMediaCardEditor extends HTMLElement {
   }
 
   setConfig(cfg) {
-    this._config = this._norm(cfg);
+    // Original-Config immer speichern — enthält 'type', 'view_layout' usw.
+    // Diese Felder sind NICHT im Schema und würden sonst beim Feuern verloren gehen.
+    this._originalCfg = cfg;
+
+    const norm = this._norm(cfg);
+
+    // Feedback-Loop-Schutz: wenn setConfig durch unser eigenes config-changed
+    // ausgelöst wurde, form.data NICHT erneut setzen → verhindert Endlosloop.
+    if (this._ownChange) {
+      this._ownChange = false;
+      this._config = norm;
+      return;
+    }
+
+    this._config = norm;
     this._ensureForm();
-    this.shadowRoot.querySelector('ha-form').data = this._config;
+
+    const form = this.shadowRoot.querySelector('ha-form');
+    if (form) form.data = this._config;
   }
 
-  // Normalisiert die Config auf konsistente Typen
+  // Config auf konsistente Typen normalisieren
   _norm(cfg) {
     return {
-      title:                 cfg.title                ?? '',
       source_name:           cfg.source_name          ?? '',
       card_height:           Number(cfg.card_height   ?? 600),
       entities:              cfg.entities?.length     ? cfg.entities : (cfg.entity ? [cfg.entity] : []),
@@ -1653,35 +1685,34 @@ class HaUnifiedMediaCardEditor extends HTMLElement {
     };
   }
 
-  // Schema mit HA-nativen Selektoren
+  // HA-Form Schema — entity-Selektor ohne filter-Array (breiteste Kompatibilität)
   get _schema() {
     return [
       {
-        type: 'expandable', title: 'Grundeinstellungen', expanded: true,
+        type: 'expandable', title: 'Grundeinstellungen',
         schema: [
-          { name: 'title',        label: 'Kartentitel',                       selector: { text: {} } },
-          { name: 'source_name',  label: 'Quellen-Name (z. B. „Sonos")',       selector: { text: {} } },
-          { name: 'card_height',  label: 'Kartenhöhe (px)',                    selector: { number: { min: 420, max: 900, step: 10, mode: 'box' } } },
-          { name: 'default_source', label: 'Standard-Quelle beim Öffnen',     selector: { select: { options: [
+          { name: 'source_name',    label: 'Quellen-Name (z. B. „Sonos")', selector: { text: {} } },
+          { name: 'card_height',    label: 'Kartenhöhe (px)',           selector: { number: { min: 420, max: 900, step: 10, mode: 'box' } } },
+          { name: 'default_source', label: 'Standard-Quelle',          selector: { select: { options: [
             { value: 'heos', label: 'HEOS / Sonos' },
             { value: 'ma',   label: 'Music Assistant' },
           ]}}},
         ],
       },
       {
-        type: 'expandable', title: 'HEOS / Sonos Lautsprecher', expanded: true,
+        type: 'expandable', title: 'HEOS / Sonos Lautsprecher',
         schema: [
-          { name: 'entities', label: 'Lautsprecher', selector: {
-            entity: { multiple: true, filter: [{ domain: 'media_player' }] }
-          }},
+          { name: 'entities',
+            label: 'Lautsprecher',
+            selector: { entity: { multiple: true, domain: 'media_player' } } },
         ],
       },
       {
         type: 'expandable', title: 'Music Assistant (optional)',
         schema: [
-          { name: 'entities_ma', label: 'MA-Lautsprecher', selector: {
-            entity: { multiple: true, filter: [{ domain: 'media_player' }] }
-          }},
+          { name: 'entities_ma',
+            label: 'MA-Lautsprecher',
+            selector: { entity: { multiple: true, domain: 'media_player' } } },
         ],
       },
       {
@@ -1704,19 +1735,22 @@ class HaUnifiedMediaCardEditor extends HTMLElement {
     ];
   }
 
-  // ha-form einmalig erzeugen und im Shadow DOM befestigen
   _ensureForm() {
     if (this._formed) return;
     this._formed = true;
 
     const form = document.createElement('ha-form');
     form.computeLabel  = s => s.label  ?? s.name;
-    form.computeHelper = s => s.helper ?? '';
+    form.computeHelper = () => '';
     form.schema = this._schema;
     if (this._hass) form.hass = this._hass;
 
     form.addEventListener('value-changed', e => {
-      this._config = e.detail.value;
+      this._ownChange = true;
+      // Kritisch: Original-Config (inkl. 'type: custom:...') mit Form-Werten mergen.
+      // ha-form gibt in e.detail.value nur Schema-Felder zurück — 'type' würde
+      // sonst verloren gehen und die Karte wäre ungültig.
+      this._config = { ...this._originalCfg, ...e.detail.value };
       this.dispatchEvent(new CustomEvent('config-changed', {
         detail:   { config: this._config },
         bubbles:  true,
@@ -1746,7 +1780,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v7.2.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v7.4.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
