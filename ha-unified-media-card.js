@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v6.2.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v6.3.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v6.2.0:
+ * Changelog v6.3.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -84,11 +84,21 @@ const srcIcon = name => {
   if (n.includes('album'))      return 'mdi:album';
   if (n.includes('track'))      return 'mdi:music-note';
   if (n.includes('internet') || n.includes('web'))   return 'mdi:web';
-  if (n.includes('image'))                            return 'mdi:image-multiple';
+  if (n.includes('image') || n.includes('photo') ||
+      n.includes('synology') || n.includes('camera')) return 'mdi:image-multiple';
+  if (n.includes('ai generated') || n.includes('ai ') ||
+      n.includes('artificial'))                       return 'mdi:robot';
+  if (n.includes('camera'))                           return 'mdi:camera';
+  if (n.includes('text to speech') || n.includes('tts') ||
+      n.includes('speech'))                           return 'mdi:text-to-speech';
+  if (n.includes('my media') || n.includes('media server')) return 'mdi:plex';
+  if (n.includes('history') || n.includes('verlauf')) return 'mdi:history';
   if (n.includes('queue') || n.includes('warteschlange')) return 'mdi:playlist-play';
   if (n.includes('server') || n.includes('dlna') ||
       n.includes('network') || n.includes('upnp'))   return 'mdi:server';
   if (n.includes('folder') || n.includes('ordner'))  return 'mdi:folder-music';
+  if (n.includes('upload'))                           return 'mdi:cloud-upload';
+  if (n.includes('aux') || n.includes('input'))      return 'mdi:audio-input-stereo-minijack';
   return 'mdi:music-circle-outline';
 };
 
@@ -419,9 +429,15 @@ const CSS = `
   .tile.active { border-color: var(--ac); background: rgba(166,124,250,.1); }
   .tile-art {
     width: 52px; height: 52px; border-radius: 11px; overflow: hidden;
+    position: relative;
     display: flex; align-items: center; justify-content: center; background: var(--s2);
   }
-  .tile-art img     { width: 100%; height: 100%; object-fit: cover; }
+  /* Bild als Overlay, object-fit:contain → Logo nicht beschnitten */
+  .tile-art img {
+    position: absolute; inset: 0; z-index: 1;
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  /* Icon immer sichtbar als Fallback-Hintergrund */
   .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 24px; }
   .tile-name { font-size: 10px; color: var(--mu); line-height: 1.2; overflow: hidden;
                text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2;
@@ -436,10 +452,14 @@ const CSS = `
   .brow-row.active { border-color: rgba(166,124,250,.35); background: rgba(166,124,250,.07); }
   .row-art {
     width: 40px; height: 40px; border-radius: 9px; overflow: hidden;
+    position: relative;
     display: flex; align-items: center; justify-content: center;
     background: var(--s2); flex-shrink: 0;
   }
-  .row-art img     { width: 100%; height: 100%; object-fit: cover; }
+  .row-art img {
+    position: absolute; inset: 0; z-index: 1;
+    width: 100%; height: 100%; object-fit: cover;
+  }
   .row-art ha-icon { color: var(--mu); --mdc-icon-size: 19px; }
   .row-inf { flex: 1; min-width: 0; }
   .row-ttl { font-size: 12px; color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -603,6 +623,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       default_source: 'heos',
       stop_instead_of_pause: 'auto',
       settings_in_footer: true,   // true = Settings im Footer; false = nur Header-Icon
+      source_name: '',               // Freitext: z. B. 'Sonos', 'Denon', 'HEOS' (Standard)
     };
   }
 
@@ -653,6 +674,8 @@ class HaUnifiedMediaCard extends HTMLElement {
     if (c === false || c === 'never')  return 'never';
     return 'auto';
   }
+  // Frei konfigurierbarer Name der HEOS/Sonos-Quelle (YAML: source_name)
+  get _heosName() { return this._config.source_name || 'HEOS'; }
 
   // ── Kartenhöhe (YAML) ──────────────────────────────────
   get _cardH() {
@@ -700,7 +723,7 @@ class HaUnifiedMediaCard extends HTMLElement {
           <div class="p-stat" id="pStat">–</div>
         </div>
         ${hasMA ? `<div class="src-tog">
-          <button class="stb ha" id="bHeos">HEOS</button>
+          <button class="stb ha" id="bHeos">${this._heosName}</button>
           <button class="stb"    id="bMA">Music Assistant</button>
         </div>` : ''}
         <button class="ico-btn" id="bSetHdr" aria-label="Einstellungen">
@@ -717,7 +740,7 @@ class HaUnifiedMediaCard extends HTMLElement {
 
         <div class="home-badge h" id="homeBadge">
           <ha-icon icon="mdi:antenna" id="homeBadgeIco"></ha-icon>
-          <span id="homeBadgeLbl">HEOS</span>
+          <span id="homeBadgeLbl">${this._heosName}</span>
         </div>
         <div class="home-title" id="homeTitle">–</div>
         <div class="home-sub"   id="homeSub">–</div>
@@ -933,8 +956,8 @@ class HaUnifiedMediaCard extends HTMLElement {
     // Browser-Sichtbarkeit
     $('hBrow').classList.toggle('hidden', isMA);
     $('mBrow').classList.toggle('hidden', !isMA);
-    $('spkSec').textContent = isMA ? 'MA-Lautsprecher wählen & Gruppen' : 'HEOS-Lautsprecher wählen & Gruppen';
-    $('qSec').textContent   = isMA ? 'MA Queue' : 'HEOS Queue';
+    $('spkSec').textContent = isMA ? 'MA-Lautsprecher wählen & Gruppen' : `${this._heosName}-Lautsprecher wählen & Gruppen`;
+    $('qSec').textContent   = isMA ? 'MA Queue' : `${this._heosName} Queue`;
 
     // Big Cover
     if (a.cover) {
@@ -950,7 +973,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     // Home-Badge
     $('homeBadge').className = `home-badge ${isMA ? 'm' : 'h'}`;
     $('homeBadgeIco').setAttribute('icon', isMA ? 'mdi:music-box-multiple' : 'mdi:antenna');
-    $('homeBadgeLbl').textContent = isMA ? 'Music Assistant' : 'HEOS';
+    $('homeBadgeLbl').textContent = isMA ? 'Music Assistant' : this._heosName;
 
     // Track-Info
     $('homeTitle').textContent = a.mediaTitle || a.mediaStation || (a.isUnavailable ? 'Nicht verfügbar' : 'Nichts läuft');
@@ -1155,12 +1178,16 @@ class HaUnifiedMediaCard extends HTMLElement {
   }
 
   _tileH(item, n) {
-    const act = (item.can_expand && !item.can_play) ? 'nav' : 'play';
-    const art = item.thumbnail
-      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy">`
-      : `<ha-icon icon="${itemIcon(item)}"></ha-icon>`;
+    const act  = (item.can_expand && !item.can_play) ? 'nav' : 'play';
+    const icon = itemIcon(item);
+    // Icon immer als Hintergrund; Bild als Overlay (transparent/broken → hidden)
+    const img  = item.thumbnail
+      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy"
+             onerror="this.style.display='none'"
+             onload="if(this.naturalWidth<=4||this.naturalHeight<=4)this.style.display='none'">`
+      : '';
     return `<div class="tile" data-act="${act}" data-idx="${n}" tabindex="0" role="button">
-      <div class="tile-art">${art}</div>
+      <div class="tile-art"><ha-icon icon="${icon}"></ha-icon>${img}</div>
       <div class="tile-name">${esc(item.title ?? '–')}</div>
     </div>`;
   }
@@ -1169,9 +1196,13 @@ class HaUnifiedMediaCard extends HTMLElement {
     const nav  = item.can_expand ?? false;
     const play = item.can_play   ?? true;
     const act  = nav ? 'nav' : 'play';
-    const art  = item.thumbnail
-      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy">`
-      : `<ha-icon icon="${itemIcon(item)}"></ha-icon>`;
+    const icon2 = itemIcon(item);
+    const imgR  = item.thumbnail
+      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy"
+             onerror="this.style.display='none'"
+             onload="if(this.naturalWidth<=4||this.naturalHeight<=4)this.style.display='none'">`
+      : '';
+    const art  = `<ha-icon icon="${icon2}"></ha-icon>${imgR}`;
     const sub  = [item.media_artist, item.media_album_name].filter(Boolean).join(' · ');
     const dur  = item.media_duration ? `<span class="row-dur">${fmtTime(item.media_duration)}</span>` : '';
     const chv  = nav  ? `<ha-icon class="row-chv" icon="mdi:chevron-right"></ha-icon>` : '';
@@ -1382,7 +1413,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v6.2.0</span>
+        <span style="font-size:11px;color:var(--dim)">v6.3.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1445,7 +1476,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v6.2.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v6.3.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
