@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v6.0.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v6.1.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v6.0.0:
+ * Changelog v6.1.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -83,8 +83,27 @@ const srcIcon = name => {
   if (n.includes('artist'))     return 'mdi:account-music';
   if (n.includes('album'))      return 'mdi:album';
   if (n.includes('track'))      return 'mdi:music-note';
-  if (n.includes('internet') || n.includes('web')) return 'mdi:web';
+  if (n.includes('internet') || n.includes('web'))   return 'mdi:web';
+  if (n.includes('image'))                            return 'mdi:image-multiple';
+  if (n.includes('queue') || n.includes('warteschlange')) return 'mdi:playlist-play';
+  if (n.includes('server') || n.includes('dlna') ||
+      n.includes('network') || n.includes('upnp'))   return 'mdi:server';
+  if (n.includes('folder') || n.includes('ordner'))  return 'mdi:folder-music';
   return 'mdi:music-circle-outline';
+};
+
+// Gibt das beste Icon für ein Browse-Item zurück (Titel + media_class)
+const itemIcon = item => {
+  const title = (item.title ?? '').toLowerCase();
+  const cls   = (item.media_class ?? '').toLowerCase();
+  // Titel-basiertes Matching hat Vorrang (präziser als media_class)
+  const byTitle = srcIcon(title);
+  if (byTitle !== 'mdi:music-circle-outline') return byTitle;
+  // Fallback: media_class
+  const byCls = classIcon(cls);
+  if (byCls !== 'mdi:play-circle-outline') return byCls;
+  // Letzter Fallback: Ordner-Icon statt Fragezeichen
+  return item.can_expand ? 'mdi:folder-music' : 'mdi:music-note';
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -262,20 +281,20 @@ const CSS = `
     position: relative; z-index: 10;
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    padding: 12px 20px 0; gap: 0; min-height: 0;
+    padding: 8px 20px 0; gap: 0; min-height: 0;
   }
   .big-cover {
-    width: 160px; height: 160px; border-radius: 16px;
+    width: 200px; height: 200px; border-radius: 18px;
     background: var(--s1); border: 1px solid var(--bd);
     overflow: hidden; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    box-shadow: 0 10px 48px rgba(0,0,0,.55);
     transition: box-shadow .4s;
-    margin-bottom: 16px;
+    margin: 0 auto 16px auto;
   }
   .big-cover.playing { box-shadow: 0 0 0 3px var(--ac), 0 8px 40px rgba(0,0,0,.5); }
   .big-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .big-cover-ph  { color: var(--mu); --mdc-icon-size: 64px; }
+  .big-cover-ph  { color: var(--mu); --mdc-icon-size: 80px; }
   .home-badge {
     display: inline-flex; align-items: center; gap: 3px;
     padding: 2px 8px; border-radius: 7px;
@@ -388,11 +407,11 @@ const CSS = `
   .tile:hover  { background: var(--s2); border-color: var(--bd); }
   .tile.active { border-color: var(--ac); background: rgba(166,124,250,.1); }
   .tile-art {
-    width: 40px; height: 40px; border-radius: 8px; overflow: hidden;
+    width: 52px; height: 52px; border-radius: 11px; overflow: hidden;
     display: flex; align-items: center; justify-content: center; background: var(--s2);
   }
   .tile-art img     { width: 100%; height: 100%; object-fit: cover; }
-  .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 20px; }
+  .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 28px; overflow: visible; }
   .tile-name { font-size: 10px; color: var(--mu); line-height: 1.2; overflow: hidden;
                text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2;
                -webkit-box-orient: vertical; width: 100%; }
@@ -405,12 +424,12 @@ const CSS = `
   .brow-row:hover  { background: var(--s2); }
   .brow-row.active { border-color: rgba(166,124,250,.35); background: rgba(166,124,250,.07); }
   .row-art {
-    width: 32px; height: 32px; border-radius: 7px; overflow: hidden;
+    width: 40px; height: 40px; border-radius: 9px; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     background: var(--s2); flex-shrink: 0;
   }
   .row-art img     { width: 100%; height: 100%; object-fit: cover; }
-  .row-art ha-icon { color: var(--mu); --mdc-icon-size: 17px; }
+  .row-art ha-icon { color: var(--mu); --mdc-icon-size: 22px; overflow: visible; }
   .row-inf { flex: 1; min-width: 0; }
   .row-ttl { font-size: 12px; color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row-sub { font-size: 10px; color: var(--mu); }
@@ -757,18 +776,6 @@ class HaUnifiedMediaCard extends HTMLElement {
         </div>
       </div>
 
-      <!-- FAVORITEN -->
-      <div class="content panel" id="panelFavorites">
-        <div id="hFavP">
-          <div class="sec">HEOS Favoriten</div>
-          <div id="hFavC"><div class="msg-l">Lade…</div></div>
-        </div>
-        <div id="mFavP" class="hidden">
-          <div class="sec">MA Favoriten &amp; Playlists</div>
-          <div id="mFavC"><div class="msg-l">Lade…</div></div>
-        </div>
-      </div>
-
       <!-- LAUTSPRECHER -->
       <div class="content panel" id="panelSpeakers">
         <div class="sec" id="spkSec">Lautsprecher wählen &amp; Gruppen</div>
@@ -796,10 +803,6 @@ class HaUnifiedMediaCard extends HTMLElement {
         <button class="ftb" id="fBrow" aria-label="Browser">
           <ha-icon icon="mdi:folder-music-outline"></ha-icon>
           <span class="ftb-lbl">Browser</span>
-        </button>
-        <button class="ftb" id="fFav" aria-label="Favoriten">
-          <ha-icon icon="mdi:heart-outline"></ha-icon>
-          <span class="ftb-lbl">Favoriten</span>
         </button>
         <button class="ftb" id="fSpk" aria-label="Lautsprecher">
           <ha-icon icon="mdi:speaker-multiple"></ha-icon>
@@ -851,7 +854,7 @@ class HaUnifiedMediaCard extends HTMLElement {
 
     // Footer
     const tabMap = {
-      fHome:'home', fBrow:'browser', fFav:'favorites',
+      fHome:'home', fBrow:'browser',
       fSpk:'speakers', fQ:'queue', fSet:'settings'
     };
     Object.entries(tabMap).forEach(([id, tab]) =>
@@ -919,8 +922,6 @@ class HaUnifiedMediaCard extends HTMLElement {
     // Browser-Sichtbarkeit
     $('hBrow').classList.toggle('hidden', isMA);
     $('mBrow').classList.toggle('hidden', !isMA);
-    $('hFavP').classList.toggle('hidden', isMA);
-    $('mFavP').classList.toggle('hidden', !isMA);
     $('spkSec').textContent = isMA ? 'MA-Lautsprecher wählen & Gruppen' : 'HEOS-Lautsprecher wählen & Gruppen';
     $('qSec').textContent   = isMA ? 'MA Queue' : 'HEOS Queue';
 
@@ -987,7 +988,6 @@ class HaUnifiedMediaCard extends HTMLElement {
     this._actId = ids[0] ?? null;
     this._update();
     this._loadBrowser();
-    if (this._tab === 'favorites')  src === 'heos' ? this._loadHeosFav() : this._loadMaFav();
     if (this._tab === 'speakers')   this._renderSpeakers();
     if (this._tab === 'queue')      this._loadQueue();
   }
@@ -997,7 +997,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     this._tab = tab;
 
     // Panels
-    const panels = ['Home','Browser','Favorites','Speakers','Queue','Settings'];
+    const panels = ['Home','Browser','Speakers','Queue','Settings'];
     panels.forEach(p =>
       this.shadowRoot.getElementById('panel'+p)
         ?.classList.toggle('show', p.toLowerCase() === tab));
@@ -1007,12 +1007,11 @@ class HaUnifiedMediaCard extends HTMLElement {
     if (div) div.classList.toggle('hidden', tab !== 'home');
 
     // Footer aktiv-Klasse
-    const fm = { home:'fHome', browser:'fBrow', favorites:'fFav', speakers:'fSpk', queue:'fQ', settings:'fSet' };
+    const fm = { home:'fHome', browser:'fBrow', speakers:'fSpk', queue:'fQ', settings:'fSet' };
     Object.entries(fm).forEach(([t, id]) =>
       this.shadowRoot.getElementById(id)?.classList.toggle('act', t === tab));
 
     if (tab === 'browser')   this._loadBrowser();
-    if (tab === 'favorites') this._src === 'heos' ? this._loadHeosFav() : this._loadMaFav();
     if (tab === 'speakers')  this._renderSpeakers();
     if (tab === 'queue')     this._loadQueue();
     if (tab === 'settings')  this._renderSettings();
@@ -1058,24 +1057,6 @@ class HaUnifiedMediaCard extends HTMLElement {
     this._hStk.pop();
     if (!this._hStk.length) this._loadHeosBrow();
     else { const t = this._hStk[this._hStk.length-1]; this._loadHeosBrow(t.type, t.id); }
-  }
-
-  /**
-   * HEOS Favoriten: HEOS unterstützt keinen direkten browse('favorites') call —
-   * stattdessen Root browsen, dann nach der Favoriten-Kategorie suchen und dort hineinnavigieren.
-   */
-  _loadHeosFav() {
-    // HEOS-Favoriten sind über den Browser-Tab erreichbar (HEOS Favoriten-Kategorie).
-    // Ein direkter browse('favorites') wird von HEOS nicht unterstützt.
-    const el = this.shadowRoot.getElementById('hFavC');
-    if (!el) return;
-    el.innerHTML = `
-      <div class="msg-e" style="padding:20px 0;text-align:center;line-height:1.8">
-        <ha-icon icon="mdi:information-outline" style="--mdc-icon-size:28px;color:var(--ac);display:block;margin:0 auto 8px"></ha-icon>
-        <strong style="color:var(--tx);font-size:13px">HEOS-Favoriten im Browser</strong><br>
-        <span style="font-size:11px">HEOS-Favoriten sind über den<br>
-        <b>Browser-Tab</b> erreichbar.</span>
-      </div>`;
   }
 
   // ══════════════════════════════════════════════════════
@@ -1126,29 +1107,6 @@ class HaUnifiedMediaCard extends HTMLElement {
     } catch { el.innerHTML = '<div class="msg-e">Suche fehlgeschlagen</div>'; }
   }
 
-  async _loadMaFav() {
-    const eid = this._actId;
-    if (!eid) return;
-    const el = this.shadowRoot.getElementById('mFavC');
-    if (!el) return;
-    el.innerHTML = '<div class="msg-l">Lade MA-Bibliothek…</div>';
-    try {
-      // MA: Root-Browse liefert alle Kategorien (Artists, Albums, Tracks, Radio, Playlists …)
-      // Kein direkter 'favorites'-Browse, da MA das nicht als Browse-Typ unterstützt.
-      const root = await this._a(eid).browse();
-      const items = root?.children ?? [];
-      if (!items.length) { el.innerHTML = '<div class="msg-e">Keine MA-Inhalte gefunden</div>'; return; }
-      // Playlist- und Favoriten-Kategorie bevorzugt anzeigen, Rest auch
-      const sorted = [
-        ...items.filter(c => (c.title??'').toLowerCase().includes('playlist') || (c.title??'').toLowerCase().includes('favorit')),
-        ...items.filter(c => !(c.title??'').toLowerCase().includes('playlist') && !(c.title??'').toLowerCase().includes('favorit')),
-      ];
-      this._renderBrow(el, { children: sorted }, 'ma');
-    } catch(e) {
-      el.innerHTML = `<div class="msg-e">Fehler: ${esc(e?.message ?? '')}</div>`;
-    }
-  }
-
   // ══════════════════════════════════════════════════════
   // UNIVERSELLER BROWSER-RENDERER
   // ══════════════════════════════════════════════════════
@@ -1189,7 +1147,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     const act = (item.can_expand && !item.can_play) ? 'nav' : 'play';
     const art = item.thumbnail
       ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy">`
-      : `<ha-icon icon="${classIcon(item.media_class)}"></ha-icon>`;
+      : `<ha-icon icon="${itemIcon(item)}"></ha-icon>`;
     return `<div class="tile" data-act="${act}" data-idx="${n}" tabindex="0" role="button">
       <div class="tile-art">${art}</div>
       <div class="tile-name">${esc(item.title ?? '–')}</div>
@@ -1202,7 +1160,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     const act  = nav ? 'nav' : 'play';
     const art  = item.thumbnail
       ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy">`
-      : `<ha-icon icon="${classIcon(item.media_class)}"></ha-icon>`;
+      : `<ha-icon icon="${itemIcon(item)}"></ha-icon>`;
     const sub  = [item.media_artist, item.media_album_name].filter(Boolean).join(' · ');
     const dur  = item.media_duration ? `<span class="row-dur">${fmtTime(item.media_duration)}</span>` : '';
     const chv  = nav  ? `<ha-icon class="row-chv" icon="mdi:chevron-right"></ha-icon>` : '';
@@ -1413,7 +1371,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v6.0.0</span>
+        <span style="font-size:11px;color:var(--dim)">v6.1.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1476,7 +1434,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v6.0.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v6.1.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
