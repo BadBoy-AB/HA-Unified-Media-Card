@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v6.4.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v7.0.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v6.4.0:
+ * Changelog v7.0.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -441,6 +441,9 @@ const CSS = `
   }
   /* Icon als Fallback: flex:0 0 auto verhindert Streckung auf volle Breite */
   .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 36px; flex: 0 0 auto; }
+  /* Echtes Bild geladen → Icon per CSS !important ausblenden */
+  .tile-art.img-ok ha-icon { display: none !important; }
+  .row-art.img-ok  ha-icon { display: none !important; }
   .tile-name { font-size: 11px; color: var(--mu); line-height: 1.3; overflow: hidden;
                text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2;
                -webkit-box-orient: vertical; width: 100%; }
@@ -633,21 +636,33 @@ class HaUnifiedMediaCard extends HTMLElement {
     if (!cfg.entity && !cfg.entities?.length && !cfg.entities_ma?.length)
       throw new Error('ha-unified-media-card: Mindestens eine Entität angeben.');
     this._config = cfg;
-    this._src    = cfg.default_source === 'ma' ? 'ma' : 'heos';
-    // Standardmäßig den ersten Player auswählen
-    const ids = cfg.entities?.length ? cfg.entities : (cfg.entity ? [cfg.entity] : []);
-    if (!this._actId && ids.length) this._actId = ids[0];
+    // Quelle auto-bestimmen: nur MA → ma; nur HEOS → heos; beide → default_source
+    const hasHEOS = !!(cfg.entities?.length || cfg.entity);
+    const hasMA   = !!(cfg.entities_ma?.length);
+    if      (hasMA && !hasHEOS) this._src = 'ma';
+    else if (hasHEOS && !hasMA) this._src = 'heos';
+    else                        this._src = cfg.default_source === 'ma' ? 'ma' : 'heos';
+    // Ersten Player der aktiven Quelle vorwählen
+    const ids = (this._src === 'ma' ? cfg.entities_ma : null)
+      ?? (cfg.entities?.length ? cfg.entities : (cfg.entity ? [cfg.entity] : []));
+    if (!this._actId && ids?.length) this._actId = ids[0];
   }
 
   set hass(h) {
     this._hass = h;
-    // Falls actId noch nicht gesetzt (z. B. beim allerersten Aufruf)
+    // Falls actId noch nicht gesetzt
     if (!this._actId) {
       const ids = this._currentIds;
       if (ids.length) this._actId = ids[0];
     }
-    if (!this._ready) { this._ready = true; this._build(); }
-    else              { this._update(); }
+    if (!this._ready) {
+      // Dashboard-Aufruf: spielenden Player automatisch anzeigen
+      this._autoSelectPlaying();
+      this._ready = true;
+      this._build();
+    } else {
+      this._update();
+    }
   }
 
   getCardSize() {
@@ -678,6 +693,30 @@ class HaUnifiedMediaCard extends HTMLElement {
   }
   // Frei konfigurierbarer Name der HEOS/Sonos-Quelle (YAML: source_name)
   get _heosName() { return this._config.source_name || 'HEOS'; }
+
+  /**
+   * Beim Dashboard-Aufruf: automatisch den spielenden Player anzeigen.
+   * Prüft ALLE konfigurierten Entitäten (HEOS + MA) auf state === 'playing'.
+   * Wählt den ersten spielenden Player und schaltet auf die passende Quelle.
+   * Priorität: MA-Player vor HEOS-Playern (höherwertige Integration).
+   * Kein spielender Player gefunden → Standard (erster Player) bleibt aktiv.
+   */
+  _autoSelectPlaying() {
+    if (!this._hass) return;
+    // MA zuerst prüfen (Priorität), dann HEOS
+    const candidates = [
+      ...this._maIds.map(id => ({ id, src: 'ma' })),
+      ...this._heosIds.map(id => ({ id, src: 'heos' })),
+    ];
+    for (const { id, src } of candidates) {
+      if (this._a(id).isPlaying) {
+        this._actId = id;
+        this._src   = src;
+        return;
+      }
+    }
+    // Kein spielender Player — Standard beibehalten
+  }
 
   // ── Kartenhöhe (YAML) ──────────────────────────────────
   get _cardH() {
@@ -714,7 +753,9 @@ class HaUnifiedMediaCard extends HTMLElement {
 
   // ── HTML-Template ──────────────────────────────────────
   _tmpl() {
-    const hasMA = this._maIds.length > 0;
+    const hasMA    = this._maIds.length > 0;
+    const hasHEOS  = this._heosIds.length > 0;
+    const showTog  = hasMA && hasHEOS; // Toggle nur wenn beide Quellen konfiguriert
     return `
       <div class="art-bg" id="artBg"></div>
 
@@ -724,7 +765,7 @@ class HaUnifiedMediaCard extends HTMLElement {
           <div class="p-name" id="pName">–</div>
           <div class="p-stat" id="pStat">–</div>
         </div>
-        ${hasMA ? `<div class="src-tog">
+        ${showTog ? `<div class="src-tog">
           <button class="stb ha" id="bHeos">${this._heosName}</button>
           <button class="stb"    id="bMA">Music Assistant</button>
         </div>` : ''}
@@ -1158,6 +1199,29 @@ class HaUnifiedMediaCard extends HTMLElement {
       ? `<div class="tile-grid">${items.map((i,n) => this._tileH(i,n)).join('')}</div>`
       : `<div class="row-list">${items.map((i,n) => this._rowH(i,n)).join('')}</div>`;
 
+    // ── Post-Render: Icon/Bild-Sichtbarkeit via Parent-Klasse steuern ───────
+    // Setzt 'img-ok' am .tile-art/.row-art Container wenn das Bild real ist.
+    // CSS: .img-ok ha-icon { display:none !important } → zuverlässig im Shadow DOM.
+    container.querySelectorAll('.tile-art img, .row-art img').forEach(img => {
+      const parent = img.parentElement;
+      if (!parent) return;
+      const markOk = () => {
+        if (img.naturalWidth > 4 && img.naturalHeight > 4) {
+          parent.classList.add('img-ok');    // echtes Bild → Icon verstecken
+        } else {
+          img.style.display = 'none';        // kaputt / 1×1px → Bild verstecken
+        }
+      };
+      if (img.complete) {
+        // Bereits geladen (Cache) → in nächstem Frame auswerten
+        requestAnimationFrame(markOk);
+      } else {
+        img.addEventListener('load',  markOk);
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+      }
+    });
+    // ────────────────────────────────────────────────────────────────────────
+
     container.querySelectorAll('[data-act]').forEach(el => {
       el.addEventListener('click', e => {
         e.stopPropagation();
@@ -1182,11 +1246,10 @@ class HaUnifiedMediaCard extends HTMLElement {
   _tileH(item, n) {
     const act  = (item.can_expand && !item.can_play) ? 'nav' : 'play';
     const icon = itemIcon(item);
-    // Icon immer als Hintergrund; Bild als Overlay (transparent/broken → hidden)
+    // ha-icon als Fallback-Hintergrund; img als Overlay.
+    // Zustand (welches sichtbar) wird in _renderBrow per JS nach dem DOM-Insert gesetzt.
     const img  = item.thumbnail
-      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy"
-             onerror="this.style.display='none'"
-             onload="if(this.naturalWidth<=4||this.naturalHeight<=4)this.style.display='none'">`
+      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy">`
       : '';
     return `<div class="tile" data-act="${act}" data-idx="${n}" tabindex="0" role="button">
       <div class="tile-art"><ha-icon icon="${icon}"></ha-icon>${img}</div>
@@ -1200,9 +1263,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     const act  = nav ? 'nav' : 'play';
     const icon2 = itemIcon(item);
     const imgR  = item.thumbnail
-      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy"
-             onerror="this.style.display='none'"
-             onload="if(this.naturalWidth<=4||this.naturalHeight<=4){this.style.display='none'}else{this.previousElementSibling.style.display='none'}">`
+      ? `<img src="${esc(item.thumbnail)}" alt="" loading="lazy">`
       : '';
     const art  = `<ha-icon icon="${icon2}"></ha-icon>${imgR}`;
     const sub  = [item.media_artist, item.media_album_name].filter(Boolean).join(' · ');
@@ -1415,7 +1476,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v6.4.0</span>
+        <span style="font-size:11px;color:var(--dim)">v7.0.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1478,7 +1539,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v6.4.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v7.0.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
