@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v7.0.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v7.1.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v7.0.0:
+ * Changelog v7.1.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -520,6 +520,21 @@ const CSS = `
   .spk-status { font-size: 10px; color: var(--mu); }
   .spk-actions { display: flex; align-items: center; gap: 6px; }
 
+  /* Gruppen-Aktionsleiste */
+  .grp-bar {
+    display: flex; gap: 8px; margin-bottom: 10px;
+  }
+  .grp-btn {
+    flex: 1; padding: 8px 12px; border-radius: 9px; border: none;
+    font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    transition: all .18s; --mdc-icon-size: 15px;
+  }
+  .grp-btn.all  { background: rgba(61,156,240,.15); color: var(--mc); }
+  .grp-btn.all:hover  { background: rgba(61,156,240,.28); }
+  .grp-btn.none { background: rgba(255,255,255,.06); color: var(--mu); }
+  .grp-btn.none:hover { background: rgba(255,255,255,.12); }
+
   /* Gruppen-Toggle */
   .tgl {
     width: 32px; height: 18px; border-radius: 9px;
@@ -618,6 +633,10 @@ class HaUnifiedMediaCard extends HTMLElement {
   }
 
   // ── Lovelace API ──────────────────────────────────────
+  static getConfigElement() {
+    return document.createElement('ha-unified-media-card-editor');
+  }
+
   static getStubConfig() {
     return {
       entity: 'media_player.heos_kueche',
@@ -629,6 +648,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       stop_instead_of_pause: 'auto',
       settings_in_footer: true,   // true = Settings im Footer; false = nur Header-Icon
       source_name: '',               // Freitext: z. B. 'Sonos', 'Denon', 'HEOS' (Standard)
+      queue_enable: true,             // Queue-Tab im Footer anzeigen
     };
   }
 
@@ -692,7 +712,9 @@ class HaUnifiedMediaCard extends HTMLElement {
     return 'auto';
   }
   // Frei konfigurierbarer Name der HEOS/Sonos-Quelle (YAML: source_name)
-  get _heosName() { return this._config.source_name || 'HEOS'; }
+  get _heosName()      { return this._config.source_name || 'HEOS'; }
+  get _queueEnabled()  { return this._config.queue_enable !== false; }
+  get _settInFooter()  { return this._config.settings_in_footer !== false; }
 
   /**
    * Beim Dashboard-Aufruf: automatisch den spielenden Player anzeigen.
@@ -743,12 +765,15 @@ class HaUnifiedMediaCard extends HTMLElement {
   // Konfiguriert Footer-Layout nach YAML
   _applyFooterConfig() {
     const $ = id => this.shadowRoot.getElementById(id);
-    const settInFooter = this._config.settings_in_footer !== false; // Standard: true
+    // Settings im Footer oder nur als Header-Icon
+    const settInFooter = this._settInFooter;
     const fSet = $('fSet');
     if (fSet) fSet.classList.toggle('hidden', !settInFooter);
-    // Header-Settings-Button: sichtbar wenn Settings NICHT im Footer
     const bSetHdr = $('bSetHdr');
     if (bSetHdr) bSetHdr.classList.toggle('hidden', settInFooter);
+    // Queue-Tab
+    const fQ = $('fQ');
+    if (fQ) fQ.classList.toggle('hidden', !this._queueEnabled);
   }
 
   // ── HTML-Template ──────────────────────────────────────
@@ -930,10 +955,8 @@ class HaUnifiedMediaCard extends HTMLElement {
     });
 
     // Footer
-    const tabMap = {
-      fHome:'home', fBrow:'browser',
-      fSpk:'speakers', fQ:'queue', fSet:'settings'
-    };
+    const tabMap = { fHome:'home', fBrow:'browser', fSpk:'speakers', fSet:'settings' };
+    if (this._queueEnabled) tabMap['fQ'] = 'queue';
     Object.entries(tabMap).forEach(([id, tab]) =>
       $(id).addEventListener('click', () => this._showTab(tab)));
 
@@ -1299,7 +1322,24 @@ class HaUnifiedMediaCard extends HTMLElement {
     const activeAdp  = this._a(activeId);
     const grpMembers = activeAdp.groupMembers; // Gruppe des aktiven Players
 
-    el.innerHTML = ids.map(id => {
+    // Aktionsleiste: Alle gruppieren / trennen
+    const anyGrouped = ids.some(id => {
+      const a = this._a(id);
+      return a.groupMembers.length > 1;
+    });
+    const barHtml = ids.length > 1 ? `
+      <div class="grp-bar">
+        <button class="grp-btn all" id="btnGrpAll">
+          <ha-icon icon="mdi:speaker-multiple"></ha-icon>
+          Alle gruppieren
+        </button>
+        <button class="grp-btn none" id="btnGrpNone">
+          <ha-icon icon="mdi:speaker"></ha-icon>
+          Alle trennen
+        </button>
+      </div>` : '';
+
+    el.innerHTML = barHtml + `<div class="spk-list-inner">` + ids.map(id => {
       const a      = this._a(id);
       const isSel  = id === activeId;                          // aktuell gewählt
       const inGrp  = isSel || grpMembers.includes(id);        // in Gruppe des aktiven Players
@@ -1335,10 +1375,20 @@ class HaUnifiedMediaCard extends HTMLElement {
             <span class="spk-vval">${a.volume}</span>
           </div>
         </div>`;
-    }).join('');
+    }).join('') + '</div>';
+
+    // Gruppen-Aktionsleiste Events
+    el.querySelector('#btnGrpAll')?.addEventListener('click', e => {
+      e.stopPropagation();
+      this._groupAll();
+    });
+    el.querySelector('#btnGrpNone')?.addEventListener('click', e => {
+      e.stopPropagation();
+      this._ungroupAll();
+    });
 
     // Lautsprecher anklicken → aktiven Player wechseln
-    el.querySelectorAll('.spk-item').forEach(item => {
+    el.querySelectorAll('.spk-list-inner .spk-item').forEach(item => {
       item.addEventListener('click', e => {
         // Nicht auslösen wenn Toggle oder Slider geklickt
         if (e.target.closest('.tgl') || e.target.closest('input')) return;
@@ -1352,7 +1402,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     });
 
     // Lautstärke-Slider
-    el.querySelectorAll('input.spk-sl').forEach(inp => {
+    el.querySelectorAll('.spk-list-inner input.spk-sl').forEach(inp => {
       inp.addEventListener('input', e => {
         e.target.nextElementSibling.textContent = e.target.value;
         this._a(e.target.dataset.id).setVol(+e.target.value);
@@ -1360,7 +1410,7 @@ class HaUnifiedMediaCard extends HTMLElement {
     });
 
     // Gruppen-Toggle
-    el.querySelectorAll('.tgl').forEach(btn => {
+    el.querySelectorAll('.spk-list-inner .tgl').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         const a2  = this._a(btn.dataset.id);
@@ -1371,6 +1421,28 @@ class HaUnifiedMediaCard extends HTMLElement {
         btn.closest('.spk-item')?.classList.toggle('grp');
       });
     });
+  }
+
+  // ── Alle Lautsprecher gruppieren (unter aktivem Player) ────────────
+  _groupAll() {
+    const ids    = this._currentIds;
+    const primId = this._actId;
+    if (!primId || ids.length < 2) return;
+    // join: alle anderen zum primären Player hinzufügen
+    const others = ids.filter(id => id !== primId);
+    this._hass.callService('media_player', 'join', {
+      entity_id:    primId,
+      group_members: others,
+    });
+    // Sofortiges UI-Update
+    setTimeout(() => this._renderSpeakers(), 500);
+  }
+
+  // ── Alle Lautsprecher trennen ───────────────────────────
+  _ungroupAll() {
+    const ids = this._currentIds;
+    ids.forEach(id => this._a(id).leaveGroup());
+    setTimeout(() => this._renderSpeakers(), 500);
   }
 
   // ══════════════════════════════════════════════════════
@@ -1476,7 +1548,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v7.0.0</span>
+        <span style="font-size:11px;color:var(--dim)">v7.1.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1526,6 +1598,198 @@ class HaUnifiedMediaCard extends HTMLElement {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// VISUELLER KONFIGURATIONS-EDITOR
+// ═══════════════════════════════════════════════════════════════
+const EDITOR_CSS = `
+  :host { display: block; }
+  .editor { padding: 4px 0; }
+  .sec-title {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--secondary-text-color, #888); margin: 18px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--divider-color, rgba(0,0,0,.12));
+  }
+  .sec-title:first-child { margin-top: 0; }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block; font-size: 13px; font-weight: 500;
+    color: var(--primary-text-color, #212121); margin-bottom: 5px;
+  }
+  .field small { display: block; font-size: 11px; color: var(--secondary-text-color,#888); margin-top: 3px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; padding: 9px 11px; border-radius: 8px;
+    border: 1px solid var(--divider-color, #ccc);
+    background: var(--card-background-color, #fff);
+    color: var(--primary-text-color, #212121);
+    font-family: inherit; font-size: 13px; outline: none; box-sizing: border-box;
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
+    border-color: var(--primary-color, #6200ea);
+  }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .row label { font-size: 13px; font-weight: 500; color: var(--primary-text-color,#212121); flex: 1; }
+  .row small { font-size: 11px; color: var(--secondary-text-color,#888); display:block; }
+  /* Toggle */
+  .toggle-wrap { flex-shrink: 0; }
+  input[type=checkbox].tgl-cb { display: none; }
+  .tgl-lbl {
+    display: block; width: 40px; height: 22px; border-radius: 11px;
+    background: var(--disabled-color, #ccc); cursor: pointer; position: relative;
+    transition: background .2s;
+  }
+  .tgl-lbl::after {
+    content: ''; position: absolute; left: 2px; top: 2px;
+    width: 18px; height: 18px; border-radius: 50%; background: #fff;
+    transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  }
+  .tgl-cb:checked + .tgl-lbl { background: var(--primary-color, #6200ea); }
+  .tgl-cb:checked + .tgl-lbl::after { transform: translateX(18px); }
+  /* half-width pair */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+`;
+
+class HaUnifiedMediaCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._config = {};
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  _fire(updated) {
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: { ...this._config, ...updated } },
+      bubbles: true, composed: true,
+    }));
+    this._config = { ...this._config, ...updated };
+  }
+
+  _str(val) { return Array.isArray(val) ? val.join('\n') : (val ?? ''); }
+  _arr(str) { return str.split('\n').map(s => s.trim()).filter(Boolean); }
+
+  _render() {
+    const cfg = this._config;
+    const chk = (k, def=true) => (cfg[k] !== false && cfg[k] !== undefined ? cfg[k] : def) ? 'checked' : '';
+    const sel  = (k, v) => (cfg[k] ?? 'auto') === v ? 'selected' : '';
+    const sel2 = (k, v) => (cfg[k] ?? 'heos') === v ? 'selected' : '';
+
+    this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style>
+<div class="editor">
+
+  <div class="sec-title">Grundeinstellungen</div>
+
+  <div class="field">
+    <label>Kartentitel</label>
+    <input type="text" id="title" value="${esc(cfg.title ?? '')}" placeholder="z. B. Heimkino">
+  </div>
+  <div class="two-col">
+    <div class="field">
+      <label>Kartenhöhe (px)</label>
+      <input type="number" id="card_height" min="420" max="900" step="10" value="${cfg.card_height ?? 600}">
+    </div>
+    <div class="field">
+      <label>Standard-Quelle</label>
+      <select id="default_source">
+        <option value="heos" ${sel2('default_source','heos')}>HEOS / Sonos</option>
+        <option value="ma"   ${sel2('default_source','ma')}>Music Assistant</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sec-title">HEOS / Sonos Lautsprecher</div>
+
+  <div class="field">
+    <label>Quellenname</label>
+    <input type="text" id="source_name" value="${esc(cfg.source_name ?? '')}" placeholder="HEOS">
+    <small>z. B. &ldquo;Sonos&rdquo;, &ldquo;Denon&rdquo; — Standard: HEOS</small>
+  </div>
+  <div class="field">
+    <label>Entitäten <small style="display:inline;font-size:11px">(eine pro Zeile)</small></label>
+    <textarea id="entities" placeholder="media_player.heos_kueche&#10;media_player.heos_wohnzimmer">${esc(this._str(cfg.entities ?? (cfg.entity ? [cfg.entity] : [])))}</textarea>
+  </div>
+
+  <div class="sec-title">Music Assistant <small style="display:inline;font-size:11px;text-transform:none">(optional)</small></div>
+
+  <div class="field">
+    <label>Entitäten <small style="display:inline;font-size:11px">(eine pro Zeile)</small></label>
+    <textarea id="entities_ma" placeholder="media_player.ma_kueche&#10;media_player.ma_wohnzimmer">${esc(this._str(cfg.entities_ma ?? []))}</textarea>
+    <small>Leer lassen wenn kein Music Assistant vorhanden</small>
+  </div>
+
+  <div class="sec-title">Wiedergabe</div>
+
+  <div class="field">
+    <label>Stop statt Pause</label>
+    <select id="stop_instead_of_pause">
+      <option value="auto"   ${sel('stop_instead_of_pause','auto')}>Auto — Radio → Stop, Tracks → Pause</option>
+      <option value="always" ${sel('stop_instead_of_pause','always')}>Immer Stop</option>
+      <option value="never"  ${sel('stop_instead_of_pause','never')}>Immer Pause</option>
+    </select>
+  </div>
+
+  <div class="sec-title">Footer Navigation</div>
+
+  <div class="row">
+    <div><label>Settings-Button im Footer</label><small>Aus: Settings nur als ⚙ im Header</small></div>
+    <div class="toggle-wrap">
+      <input type="checkbox" class="tgl-cb" id="settings_in_footer" ${chk('settings_in_footer',true)}>
+      <label class="tgl-lbl" for="settings_in_footer"></label>
+    </div>
+  </div>
+
+  <div class="row">
+    <div><label>Queue-Tab im Footer</label><small>Queue-Anzeige ein-/ausblenden</small></div>
+    <div class="toggle-wrap">
+      <input type="checkbox" class="tgl-cb" id="queue_enable" ${chk('queue_enable',true)}>
+      <label class="tgl-lbl" for="queue_enable"></label>
+    </div>
+  </div>
+
+</div>`;
+
+    // Text/Number/Select Inputs
+    const inputs = ['title','card_height','source_name','default_source','stop_instead_of_pause'];
+    inputs.forEach(id => {
+      const el = this.shadowRoot.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        const raw = el.value;
+        const val = id === 'card_height' ? parseInt(raw) : raw;
+        this._fire({ [id]: val });
+      });
+    });
+
+    // Textarea: entities
+    ['entities','entities_ma'].forEach(id => {
+      const el = this.shadowRoot.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        const arr = this._arr(el.value);
+        if (id === 'entities') {
+          this._fire({ entities: arr, entity: arr[0] ?? '' });
+        } else {
+          this._fire({ entities_ma: arr });
+        }
+      });
+    });
+
+    // Toggles
+    ['settings_in_footer','queue_enable'].forEach(id => {
+      const el = this.shadowRoot.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => this._fire({ [id]: el.checked }));
+    });
+  }
+}
+
+customElements.define('ha-unified-media-card-editor', HaUnifiedMediaCardEditor);
+
+// ═══════════════════════════════════════════════════════════════
 // REGISTRATION
 // ═══════════════════════════════════════════════════════════════
 customElements.define('ha-unified-media-card', HaUnifiedMediaCard);
@@ -1539,7 +1803,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v7.0.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v7.1.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
