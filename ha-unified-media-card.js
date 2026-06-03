@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v7.1.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v7.2.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v7.1.0:
+ * Changelog v7.2.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -1428,21 +1428,36 @@ class HaUnifiedMediaCard extends HTMLElement {
     const ids    = this._currentIds;
     const primId = this._actId;
     if (!primId || ids.length < 2) return;
-    // join: alle anderen zum primären Player hinzufügen
     const others = ids.filter(id => id !== primId);
-    this._hass.callService('media_player', 'join', {
-      entity_id:    primId,
-      group_members: others,
-    });
-    // Sofortiges UI-Update
-    setTimeout(() => this._renderSpeakers(), 500);
+    this._hass.callService('media_player', 'join', { entity_id: primId, group_members: others });
+    // Sofortiges DOM-Feedback — nicht auf HA-State warten
+    this.shadowRoot.querySelector('.spk-list-inner')
+      ?.querySelectorAll('.spk-item:not(.sel)').forEach(item => {
+        item.classList.add('grp');
+        item.querySelector('.tgl')?.classList.add('on');
+        const s = item.querySelector('.spk-status');
+        if (s) s.textContent = 'In Gruppe';
+      });
+    setTimeout(() => this._renderSpeakers(), 2000);
   }
 
   // ── Alle Lautsprecher trennen ───────────────────────────
   _ungroupAll() {
     const ids = this._currentIds;
     ids.forEach(id => this._a(id).leaveGroup());
-    setTimeout(() => this._renderSpeakers(), 500);
+    // Sofortiges DOM-Feedback — nicht auf HA-State warten
+    this.shadowRoot.querySelector('.spk-list-inner')
+      ?.querySelectorAll('.spk-item').forEach(item => {
+        item.classList.remove('grp');
+        item.querySelector('.tgl')?.classList.remove('on');
+        if (!item.classList.contains('sel')) {
+          const s = item.querySelector('.spk-status');
+          const a = this._a(item.dataset.id);
+          if (s) s.textContent = ({ playing:'Wiedergabe', paused:'Pausiert',
+            idle:'Bereit', off:'Aus' })[a.state] ?? a.state;
+        }
+      });
+    setTimeout(() => this._renderSpeakers(), 2000);
   }
 
   // ══════════════════════════════════════════════════════
@@ -1548,7 +1563,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v7.1.0</span>
+        <span style="font-size:11px;color:var(--dim)">v7.2.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1598,194 +1613,122 @@ class HaUnifiedMediaCard extends HTMLElement {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// VISUELLER KONFIGURATIONS-EDITOR
+// KONFIGURATIONS-EDITOR  (nutzt HA-native ha-form + Selektoren)
 // ═══════════════════════════════════════════════════════════════
-const EDITOR_CSS = `
-  :host { display: block; }
-  .editor { padding: 4px 0; }
-  .sec-title {
-    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--secondary-text-color, #888); margin: 18px 0 8px; padding-bottom: 4px;
-    border-bottom: 1px solid var(--divider-color, rgba(0,0,0,.12));
-  }
-  .sec-title:first-child { margin-top: 0; }
-  .field { margin-bottom: 12px; }
-  .field label {
-    display: block; font-size: 13px; font-weight: 500;
-    color: var(--primary-text-color, #212121); margin-bottom: 5px;
-  }
-  .field small { display: block; font-size: 11px; color: var(--secondary-text-color,#888); margin-top: 3px; }
-  input[type=text], input[type=number], select, textarea {
-    width: 100%; padding: 9px 11px; border-radius: 8px;
-    border: 1px solid var(--divider-color, #ccc);
-    background: var(--card-background-color, #fff);
-    color: var(--primary-text-color, #212121);
-    font-family: inherit; font-size: 13px; outline: none; box-sizing: border-box;
-    transition: border-color .15s;
-  }
-  input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
-    border-color: var(--primary-color, #6200ea);
-  }
-  textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-  .row label { font-size: 13px; font-weight: 500; color: var(--primary-text-color,#212121); flex: 1; }
-  .row small { font-size: 11px; color: var(--secondary-text-color,#888); display:block; }
-  /* Toggle */
-  .toggle-wrap { flex-shrink: 0; }
-  input[type=checkbox].tgl-cb { display: none; }
-  .tgl-lbl {
-    display: block; width: 40px; height: 22px; border-radius: 11px;
-    background: var(--disabled-color, #ccc); cursor: pointer; position: relative;
-    transition: background .2s;
-  }
-  .tgl-lbl::after {
-    content: ''; position: absolute; left: 2px; top: 2px;
-    width: 18px; height: 18px; border-radius: 50%; background: #fff;
-    transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3);
-  }
-  .tgl-cb:checked + .tgl-lbl { background: var(--primary-color, #6200ea); }
-  .tgl-cb:checked + .tgl-lbl::after { transform: translateX(18px); }
-  /* half-width pair */
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-`;
 
 class HaUnifiedMediaCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
     this._config = {};
+    this._hass   = null;
+    this._formed = false;
   }
 
-  setConfig(config) {
-    this._config = { ...config };
-    this._render();
+  // HA übergibt hass zum Editor — für Entity-Picker notwendig
+  set hass(h) {
+    this._hass = h;
+    const form = this.shadowRoot.querySelector('ha-form');
+    if (form) form.hass = h;
   }
 
-  _fire(updated) {
-    this.dispatchEvent(new CustomEvent('config-changed', {
-      detail: { config: { ...this._config, ...updated } },
-      bubbles: true, composed: true,
-    }));
-    this._config = { ...this._config, ...updated };
+  setConfig(cfg) {
+    this._config = this._norm(cfg);
+    this._ensureForm();
+    this.shadowRoot.querySelector('ha-form').data = this._config;
   }
 
-  _str(val) { return Array.isArray(val) ? val.join('\n') : (val ?? ''); }
-  _arr(str) { return str.split('\n').map(s => s.trim()).filter(Boolean); }
+  // Normalisiert die Config auf konsistente Typen
+  _norm(cfg) {
+    return {
+      title:                 cfg.title                ?? '',
+      source_name:           cfg.source_name          ?? '',
+      card_height:           Number(cfg.card_height   ?? 600),
+      entities:              cfg.entities?.length     ? cfg.entities : (cfg.entity ? [cfg.entity] : []),
+      entities_ma:           cfg.entities_ma          ?? [],
+      default_source:        cfg.default_source       ?? 'heos',
+      stop_instead_of_pause: cfg.stop_instead_of_pause ?? 'auto',
+      settings_in_footer:    cfg.settings_in_footer !== false,
+      queue_enable:          cfg.queue_enable         !== false,
+    };
+  }
 
-  _render() {
-    const cfg = this._config;
-    const chk = (k, def=true) => (cfg[k] !== false && cfg[k] !== undefined ? cfg[k] : def) ? 'checked' : '';
-    const sel  = (k, v) => (cfg[k] ?? 'auto') === v ? 'selected' : '';
-    const sel2 = (k, v) => (cfg[k] ?? 'heos') === v ? 'selected' : '';
+  // Schema mit HA-nativen Selektoren
+  get _schema() {
+    return [
+      {
+        type: 'expandable', title: 'Grundeinstellungen', expanded: true,
+        schema: [
+          { name: 'title',        label: 'Kartentitel',                       selector: { text: {} } },
+          { name: 'source_name',  label: 'Quellen-Name (z. B. „Sonos")',       selector: { text: {} } },
+          { name: 'card_height',  label: 'Kartenhöhe (px)',                    selector: { number: { min: 420, max: 900, step: 10, mode: 'box' } } },
+          { name: 'default_source', label: 'Standard-Quelle beim Öffnen',     selector: { select: { options: [
+            { value: 'heos', label: 'HEOS / Sonos' },
+            { value: 'ma',   label: 'Music Assistant' },
+          ]}}},
+        ],
+      },
+      {
+        type: 'expandable', title: 'HEOS / Sonos Lautsprecher', expanded: true,
+        schema: [
+          { name: 'entities', label: 'Lautsprecher', selector: {
+            entity: { multiple: true, filter: [{ domain: 'media_player' }] }
+          }},
+        ],
+      },
+      {
+        type: 'expandable', title: 'Music Assistant (optional)',
+        schema: [
+          { name: 'entities_ma', label: 'MA-Lautsprecher', selector: {
+            entity: { multiple: true, filter: [{ domain: 'media_player' }] }
+          }},
+        ],
+      },
+      {
+        type: 'expandable', title: 'Wiedergabe',
+        schema: [
+          { name: 'stop_instead_of_pause', label: 'Stop statt Pause', selector: { select: { options: [
+            { value: 'auto',   label: 'Auto — Radio → Stop, Tracks → Pause' },
+            { value: 'always', label: 'Immer Stop' },
+            { value: 'never',  label: 'Immer Pause' },
+          ]}}},
+        ],
+      },
+      {
+        type: 'expandable', title: 'Footer Navigation',
+        schema: [
+          { name: 'settings_in_footer', label: 'Settings-Tab im Footer anzeigen', selector: { boolean: {} } },
+          { name: 'queue_enable',       label: 'Queue-Tab im Footer anzeigen',     selector: { boolean: {} } },
+        ],
+      },
+    ];
+  }
 
-    this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style>
-<div class="editor">
+  // ha-form einmalig erzeugen und im Shadow DOM befestigen
+  _ensureForm() {
+    if (this._formed) return;
+    this._formed = true;
 
-  <div class="sec-title">Grundeinstellungen</div>
+    const form = document.createElement('ha-form');
+    form.computeLabel  = s => s.label  ?? s.name;
+    form.computeHelper = s => s.helper ?? '';
+    form.schema = this._schema;
+    if (this._hass) form.hass = this._hass;
 
-  <div class="field">
-    <label>Kartentitel</label>
-    <input type="text" id="title" value="${esc(cfg.title ?? '')}" placeholder="z. B. Heimkino">
-  </div>
-  <div class="two-col">
-    <div class="field">
-      <label>Kartenhöhe (px)</label>
-      <input type="number" id="card_height" min="420" max="900" step="10" value="${cfg.card_height ?? 600}">
-    </div>
-    <div class="field">
-      <label>Standard-Quelle</label>
-      <select id="default_source">
-        <option value="heos" ${sel2('default_source','heos')}>HEOS / Sonos</option>
-        <option value="ma"   ${sel2('default_source','ma')}>Music Assistant</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="sec-title">HEOS / Sonos Lautsprecher</div>
-
-  <div class="field">
-    <label>Quellenname</label>
-    <input type="text" id="source_name" value="${esc(cfg.source_name ?? '')}" placeholder="HEOS">
-    <small>z. B. &ldquo;Sonos&rdquo;, &ldquo;Denon&rdquo; — Standard: HEOS</small>
-  </div>
-  <div class="field">
-    <label>Entitäten <small style="display:inline;font-size:11px">(eine pro Zeile)</small></label>
-    <textarea id="entities" placeholder="media_player.heos_kueche&#10;media_player.heos_wohnzimmer">${esc(this._str(cfg.entities ?? (cfg.entity ? [cfg.entity] : [])))}</textarea>
-  </div>
-
-  <div class="sec-title">Music Assistant <small style="display:inline;font-size:11px;text-transform:none">(optional)</small></div>
-
-  <div class="field">
-    <label>Entitäten <small style="display:inline;font-size:11px">(eine pro Zeile)</small></label>
-    <textarea id="entities_ma" placeholder="media_player.ma_kueche&#10;media_player.ma_wohnzimmer">${esc(this._str(cfg.entities_ma ?? []))}</textarea>
-    <small>Leer lassen wenn kein Music Assistant vorhanden</small>
-  </div>
-
-  <div class="sec-title">Wiedergabe</div>
-
-  <div class="field">
-    <label>Stop statt Pause</label>
-    <select id="stop_instead_of_pause">
-      <option value="auto"   ${sel('stop_instead_of_pause','auto')}>Auto — Radio → Stop, Tracks → Pause</option>
-      <option value="always" ${sel('stop_instead_of_pause','always')}>Immer Stop</option>
-      <option value="never"  ${sel('stop_instead_of_pause','never')}>Immer Pause</option>
-    </select>
-  </div>
-
-  <div class="sec-title">Footer Navigation</div>
-
-  <div class="row">
-    <div><label>Settings-Button im Footer</label><small>Aus: Settings nur als ⚙ im Header</small></div>
-    <div class="toggle-wrap">
-      <input type="checkbox" class="tgl-cb" id="settings_in_footer" ${chk('settings_in_footer',true)}>
-      <label class="tgl-lbl" for="settings_in_footer"></label>
-    </div>
-  </div>
-
-  <div class="row">
-    <div><label>Queue-Tab im Footer</label><small>Queue-Anzeige ein-/ausblenden</small></div>
-    <div class="toggle-wrap">
-      <input type="checkbox" class="tgl-cb" id="queue_enable" ${chk('queue_enable',true)}>
-      <label class="tgl-lbl" for="queue_enable"></label>
-    </div>
-  </div>
-
-</div>`;
-
-    // Text/Number/Select Inputs
-    const inputs = ['title','card_height','source_name','default_source','stop_instead_of_pause'];
-    inputs.forEach(id => {
-      const el = this.shadowRoot.getElementById(id);
-      if (!el) return;
-      el.addEventListener('change', () => {
-        const raw = el.value;
-        const val = id === 'card_height' ? parseInt(raw) : raw;
-        this._fire({ [id]: val });
-      });
+    form.addEventListener('value-changed', e => {
+      this._config = e.detail.value;
+      this.dispatchEvent(new CustomEvent('config-changed', {
+        detail:   { config: this._config },
+        bubbles:  true,
+        composed: true,
+      }));
     });
 
-    // Textarea: entities
-    ['entities','entities_ma'].forEach(id => {
-      const el = this.shadowRoot.getElementById(id);
-      if (!el) return;
-      el.addEventListener('change', () => {
-        const arr = this._arr(el.value);
-        if (id === 'entities') {
-          this._fire({ entities: arr, entity: arr[0] ?? '' });
-        } else {
-          this._fire({ entities_ma: arr });
-        }
-      });
-    });
-
-    // Toggles
-    ['settings_in_footer','queue_enable'].forEach(id => {
-      const el = this.shadowRoot.getElementById(id);
-      if (!el) return;
-      el.addEventListener('change', () => this._fire({ [id]: el.checked }));
-    });
+    this.shadowRoot.innerHTML = '';
+    this.shadowRoot.appendChild(form);
   }
 }
+
 
 customElements.define('ha-unified-media-card-editor', HaUnifiedMediaCardEditor);
 
@@ -1803,7 +1746,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v7.1.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v7.2.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
