@@ -1,10 +1,10 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          HA UNIFIED MEDIA CARD  —  v6.1.0                  ║
+ * ║          HA UNIFIED MEDIA CARD  —  v6.2.0                  ║
  * ║    HEOS · Sonos · Music Assistant  —  Lovelace Card        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * Changelog v6.1.0:
+ * Changelog v6.2.0:
  *  [NEU]  Tab "Startseite" (Home) → großes Cover, Titel, Steuerung, Progress
  *  [FIX]  HEOS Favoriten: browse ohne content_id-Parameter (Root-Browse → Favoriten-Kategorie)
  *  [NEU]  Lautsprecher-Auswahl: jeder Player ist einzeln anwählbar (wie Maxi Media Player)
@@ -258,23 +258,23 @@ const CSS = `
   }
   .src-tog {
     display: flex; background: rgba(255,255,255,.07);
-    border-radius: 18px; padding: 2px; gap: 1px; flex-shrink: 0;
+    border-radius: 20px; padding: 3px; gap: 1px; flex-shrink: 0;
   }
   .stb {
-    padding: 4px 10px; border-radius: 14px; border: none;
+    padding: 6px 14px; border-radius: 16px; border: none;
     background: transparent; color: var(--mu);
-    font-size: 11px; font-weight: 700; cursor: pointer;
+    font-size: 12px; font-weight: 700; cursor: pointer;
     transition: all .2s; font-family: inherit; white-space: nowrap;
   }
   .stb.ha { background: var(--hc); color: #fff; }
   .stb.ma { background: var(--mc); color: #fff; }
   .ico-btn {
     background: rgba(255,255,255,.07); border: none; border-radius: 50%;
-    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
     cursor: pointer; color: var(--mu); flex-shrink: 0; transition: background .2s;
   }
   .ico-btn:hover { background: rgba(255,255,255,.14); }
-  .ico-btn ha-icon { --mdc-icon-size: 16px; }
+  .ico-btn ha-icon { --mdc-icon-size: 18px; }
 
   /* ── Startseite: großes Now-Playing ──────────────── */
   .home-view {
@@ -389,13 +389,24 @@ const CSS = `
   .sec:first-child { margin-top: 0; }
 
   /* ── Media Browser ────────────────────────────────── */
-  .brow-hdr { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
-  .brow-back {
-    display: flex; align-items: center; gap: 3px; color: var(--ac); font-size: 11px;
-    cursor: pointer; background: none; border: none; font-family: inherit; padding: 0;
-    flex-shrink: 0;
+  .brow-hdr {
+    display: flex; align-items: center; gap: 7px;
+    position: sticky; top: -10px;
+    margin: -10px -13px 10px -13px;
+    padding: 10px 13px 10px 13px;
+    background: var(--bg);
+    z-index: 5;
+    border-bottom: 1px solid var(--bd);
   }
-  .brow-back ha-icon { --mdc-icon-size: 14px; }
+  .brow-back {
+    display: flex; align-items: center; gap: 4px; color: var(--ac); font-size: 13px;
+    font-weight: 600; cursor: pointer;
+    background: rgba(166,124,250,.12); border: none; font-family: inherit;
+    padding: 6px 12px 6px 8px; border-radius: 20px; flex-shrink: 0;
+    transition: background .15s;
+  }
+  .brow-back:hover { background: rgba(166,124,250,.22); }
+  .brow-back ha-icon { --mdc-icon-size: 18px; }
   .brow-title { font-size: 12px; font-weight: 600; color: var(--tx); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .tile-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
@@ -411,7 +422,7 @@ const CSS = `
     display: flex; align-items: center; justify-content: center; background: var(--s2);
   }
   .tile-art img     { width: 100%; height: 100%; object-fit: cover; }
-  .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 28px; overflow: visible; }
+  .tile-art ha-icon { color: var(--mu); --mdc-icon-size: 24px; }
   .tile-name { font-size: 10px; color: var(--mu); line-height: 1.2; overflow: hidden;
                text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2;
                -webkit-box-orient: vertical; width: 100%; }
@@ -429,7 +440,7 @@ const CSS = `
     background: var(--s2); flex-shrink: 0;
   }
   .row-art img     { width: 100%; height: 100%; object-fit: cover; }
-  .row-art ha-icon { color: var(--mu); --mdc-icon-size: 22px; overflow: visible; }
+  .row-art ha-icon { color: var(--mu); --mdc-icon-size: 19px; }
   .row-inf { flex: 1; min-width: 0; }
   .row-ttl { font-size: 12px; color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row-sub { font-size: 10px; color: var(--mu); }
@@ -1371,7 +1382,7 @@ class HaUnifiedMediaCard extends HTMLElement {
       <div class="sec">Info</div>
       <div class="s-row">
         <span class="s-lbl">Version</span>
-        <span style="font-size:11px;color:var(--dim)">v6.1.0</span>
+        <span style="font-size:11px;color:var(--dim)">v6.2.0</span>
       </div>
       <div class="s-row">
         <span class="s-lbl">Quelle</span>
@@ -1434,7 +1445,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c HA-UNIFIED-MEDIA-CARD %c v6.1.0 ',
+  '%c HA-UNIFIED-MEDIA-CARD %c v6.2.0 ',
   'background:#a67cfa;color:#fff;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold',
   'background:#12121a;color:#a67cfa;padding:2px 8px;border-radius:0 4px 4px 0'
 );
